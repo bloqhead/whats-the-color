@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>What Color Is The Reflecting Pool?</title>
+  <meta name="description" content="A simple empirical investigation into whether the Lincoln Memorial Reflecting Pool is, in fact, green." />
+  <meta property="og:title" content="What Color Is The Reflecting Pool?" />
+  <meta property="og:description" content="Your eyes do not deceive you. IT'S FUCKING GREEN." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Anton&family=DM+Mono:wght@400;500&family=Inter:wght@400;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --green-pool: #5a7a52;
+      --green-accent: #3d6b35;
+      --green-bright: #6abf5e;
+      --red-alarm: #d63c2f;
+      --ink: #0d0d0d;
+      --paper: #f2eed8;
+      --paper-dark: #e8e2c4;
+      --muted: #7a7560;
+      --white: #fafaf8;
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      font-size: 16px;
+      scroll-behavior: smooth;
+    }
+
+    body {
+      background: var(--paper);
+      color: var(--ink);
+      font-family: 'Inter', sans-serif;
+      line-height: 1.5;
+      overflow-x: hidden;
+    }
+
+    /* ── EMERGENCY BROADCAST HEADER ── */
+    .broadcast-bar {
+      background: var(--red-alarm);
+      color: white;
+      text-align: center;
+      padding: 0.5rem 1rem;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.75rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      animation: flash-bar 2.5s step-start infinite;
+    }
+
+    @keyframes flash-bar {
+      0%, 100% { background: var(--red-alarm); }
+      50% { background: #a82a20; }
+    }
+
+    /* ── HERO ── */
+    .hero {
+      background: var(--ink);
+      color: var(--paper);
+      padding: 3rem 2rem 2rem;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(255,255,255,0.025) 2px,
+        rgba(255,255,255,0.025) 4px
+      );
+      pointer-events: none;
+    }
+
+    .eyebrow {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.7rem;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      color: var(--green-bright);
+      margin-bottom: 1.25rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.75rem;
+    }
+
+    .eyebrow::before,
+    .eyebrow::after {
+      content: '';
+      display: inline-block;
+      height: 1px;
+      width: 3rem;
+      background: var(--green-bright);
+      opacity: 0.6;
+    }
+
+    .hero-title {
+      font-family: 'Anton', sans-serif;
+      font-size: clamp(3.5rem, 10vw, 8rem);
+      line-height: 0.95;
+      letter-spacing: -0.01em;
+      text-transform: uppercase;
+      color: var(--paper);
+    }
+
+    .hero-title span.green-word {
+      color: var(--green-bright);
+      display: block;
+      font-size: clamp(4.5rem, 13vw, 11rem);
+    }
+
+    .hero-subtitle {
+      margin-top: 1.5rem;
+      font-size: 1rem;
+      color: var(--paper-dark);
+      max-width: 40rem;
+      margin-inline: auto;
+      opacity: 0.8;
+      font-style: italic;
+    }
+
+    /* ── ORWELL QUOTE BAND ── */
+    .orwell-band {
+      background: var(--green-accent);
+      color: var(--paper);
+      padding: 1.5rem 2rem;
+      text-align: center;
+    }
+
+    .orwell-quote {
+      font-family: 'DM Mono', monospace;
+      font-size: clamp(0.75rem, 2vw, 1rem);
+      letter-spacing: 0.05em;
+      max-width: 55rem;
+      margin: 0 auto;
+      line-height: 1.7;
+    }
+
+    .orwell-quote cite {
+      display: block;
+      margin-top: 0.5rem;
+      font-size: 0.7rem;
+      opacity: 0.7;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      font-style: normal;
+    }
+
+    /* ── MAIN CONTENT ── */
+    .main {
+      max-width: 72rem;
+      margin: 0 auto;
+      padding: 3rem 2rem;
+    }
+
+    /* ── PHOTO SECTION ── */
+    .photo-section {
+      margin-bottom: 4rem;
+    }
+
+    .section-label {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.65rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .section-label::after {
+      content: '';
+      display: inline-block;
+      height: 1px;
+      flex: 1;
+      background: var(--muted);
+      opacity: 0.3;
+    }
+
+    .photo-header {
+      font-family: 'Anton', sans-serif;
+      font-size: clamp(1.75rem, 4vw, 3rem);
+      line-height: 1;
+      text-transform: uppercase;
+      margin-bottom: 0.5rem;
+    }
+
+    .photo-deck {
+      font-size: 0.95rem;
+      color: var(--muted);
+      max-width: 38rem;
+      margin-bottom: 2rem;
+    }
+
+    .photo-frame {
+      position: relative;
+      border: 3px solid var(--ink);
+      overflow: hidden;
+      background: #2a3a28;
+    }
+
+    .photo-frame img {
+      width: 100%;
+      height: auto;
+      display: block;
+      max-height: 520px;
+      object-fit: cover;
+    }
+
+    .photo-caption {
+      background: var(--ink);
+      color: var(--paper);
+      padding: 0.6rem 1rem;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.7rem;
+      letter-spacing: 0.05em;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    .photo-source {
+      opacity: 0.5;
+      font-size: 0.6rem;
+    }
+
+    /* ── EYEDROPPER TOOL ── */
+    .tool-section {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2rem;
+      margin-bottom: 4rem;
+    }
+
+    @media (max-width: 640px) {
+      .tool-section {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .tool-card {
+      background: var(--white);
+      border: 2px solid var(--ink);
+      padding: 1.75rem;
+    }
+
+    .tool-card-label {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.65rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 1rem;
+    }
+
+    .tool-card h3 {
+      font-family: 'Anton', sans-serif;
+      font-size: 1.5rem;
+      text-transform: uppercase;
+      margin-bottom: 0.75rem;
+    }
+
+    .tool-card p {
+      font-size: 0.875rem;
+      color: var(--muted);
+      margin-bottom: 1.5rem;
+      line-height: 1.6;
+    }
+
+    /* Eyedropper button */
+    .eyedropper-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.75rem;
+      background: var(--ink);
+      color: var(--paper);
+      border: none;
+      padding: 0.875rem 1.5rem;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.8rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+      width: 100%;
+      justify-content: center;
+    }
+
+    .eyedropper-btn:hover {
+      background: var(--green-accent);
+      transform: translateY(-1px);
+    }
+
+    .eyedropper-btn:active {
+      transform: translateY(0);
+    }
+
+    .eyedropper-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .eyedropper-btn svg {
+      width: 18px;
+      height: 18px;
+      flex-shrink: 0;
+    }
+
+    .no-support-msg {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--red-alarm);
+      margin-top: 0.75rem;
+      display: none;
+    }
+
+    /* Color chip */
+    .color-chip-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .color-chip {
+      width: 100%;
+      height: 160px;
+      border: 2px solid var(--ink);
+      transition: background-color 0.3s ease;
+      position: relative;
+      overflow: hidden;
+      background: var(--paper-dark);
+    }
+
+    .color-chip::after {
+      content: 'SAMPLE A COLOR →';
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.65rem;
+      letter-spacing: 0.2em;
+      color: var(--muted);
+      opacity: 0.5;
+    }
+
+    .color-chip.has-color::after {
+      display: none;
+    }
+
+    .color-meta {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.5rem;
+    }
+
+    .color-meta-item {
+      background: var(--paper-dark);
+      padding: 0.75rem;
+      border: 1px solid rgba(0,0,0,0.12);
+    }
+
+    .color-meta-item label {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.55rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--muted);
+      display: block;
+      margin-bottom: 0.25rem;
+    }
+
+    .color-meta-item span {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: var(--ink);
+    }
+
+    /* ── VERDICT BANNER ── */
+    .verdict {
+      border: 3px solid var(--ink);
+      padding: 2rem;
+      text-align: center;
+      background: var(--white);
+      position: relative;
+      display: none;
+    }
+
+    .verdict.visible {
+      display: block;
+    }
+
+    .verdict.green {
+      border-color: var(--green-accent);
+      background: #e8f4e5;
+    }
+
+    .verdict.not-green {
+      border-color: var(--red-alarm);
+      background: #fce8e6;
+    }
+
+    .verdict-tag {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.65rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      margin-bottom: 0.75rem;
+    }
+
+    .verdict.green .verdict-tag { color: var(--green-accent); }
+    .verdict.not-green .verdict-tag { color: var(--red-alarm); }
+
+    .verdict-headline {
+      font-family: 'Anton', sans-serif;
+      font-size: clamp(1.75rem, 5vw, 3.5rem);
+      text-transform: uppercase;
+      line-height: 1;
+      margin-bottom: 0.75rem;
+    }
+
+    .verdict.green .verdict-headline { color: var(--green-accent); }
+    .verdict.not-green .verdict-headline { color: var(--red-alarm); }
+
+    .verdict-body {
+      font-size: 0.9rem;
+      color: var(--muted);
+      max-width: 32rem;
+      margin: 0 auto;
+    }
+
+    /* ── EXCUSE BINGO ── */
+    .excuse-section {
+      margin-top: 4rem;
+      padding-top: 3rem;
+      border-top: 3px solid var(--ink);
+    }
+
+    .excuse-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1rem;
+      margin-top: 2rem;
+    }
+
+    .excuse-card {
+      background: var(--white);
+      border: 2px solid var(--ink);
+      padding: 1.25rem;
+      position: relative;
+    }
+
+    .excuse-num {
+      font-family: 'Anton', sans-serif;
+      font-size: 2.5rem;
+      color: var(--paper-dark);
+      position: absolute;
+      top: 0.5rem;
+      right: 0.75rem;
+      line-height: 1;
+    }
+
+    .excuse-card h4 {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.8rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.5rem;
+      padding-right: 2rem;
+    }
+
+    .excuse-card p {
+      font-size: 0.8rem;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .excuse-card .verdict-badge {
+      display: inline-block;
+      margin-top: 0.75rem;
+      padding: 0.2rem 0.6rem;
+      background: var(--red-alarm);
+      color: white;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.6rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+    }
+
+    /* ── FOOTER ── */
+    footer {
+      margin-top: 5rem;
+      border-top: 3px solid var(--ink);
+      padding: 2rem;
+      text-align: center;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.7rem;
+      color: var(--muted);
+      letter-spacing: 0.1em;
+    }
+
+    footer .footer-headline {
+      font-family: 'Anton', sans-serif;
+      font-size: 1rem;
+      color: var(--ink);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.5rem;
+    }
+
+    /* ── COLOR ANALYSIS NOTE ── */
+    .analysis-note {
+      background: var(--paper-dark);
+      border-left: 4px solid var(--green-accent);
+      padding: 1.25rem 1.5rem;
+      margin-top: 1.5rem;
+      font-size: 0.85rem;
+      line-height: 1.6;
+      color: var(--muted);
+      font-style: italic;
+    }
+
+    .analysis-note strong {
+      color: var(--ink);
+      font-style: normal;
+    }
+
+  </style>
+</head>
+<body>
+
+  <div class="broadcast-bar">
+    ⚠ BREAKING: LOCAL EYES CONTINUE TO FUNCTION CORRECTLY — POOL REMAINS GREEN ⚠
+  </div>
+
+  <header class="hero">
+    <div class="eyebrow">Empirical Investigation · Washington D.C.</div>
+    <h1 class="hero-title">
+      What Color Is<br>The Reflecting Pool?
+      <span class="green-word">It's F*cking Green.</span>
+    </h1>
+    <p class="hero-subtitle">
+      A state-of-the-art scientific instrument — your eyes — will confirm this.
+      We have done the difficult work of pointing a camera at it.
+    </p>
+  </header>
+
+  <div class="orwell-band">
+    <blockquote class="orwell-quote">
+      "The party told you to reject the evidence of your eyes and ears. It was their final, most essential command."
+      <cite>— George Orwell, Nineteen Eighty-Four (1949)</cite>
+    </blockquote>
+  </div>
+
+  <main class="main">
+
+    <!-- PHOTO -->
+    <section class="photo-section">
+      <div class="section-label">Exhibit A</div>
+      <h2 class="photo-header">The Receipts</h2>
+      <p class="photo-deck">
+        Presented without comment. Allegedly controversial. Definitely green.
+      </p>
+      <div class="photo-frame">
+        <img
+          id="poolPhoto"
+          src="https://upload.wikimedia.org/wikipedia/commons/thumb/0/08/Lincoln_Memorial_reflecting_pool_-_DC.jpg/1280px-Lincoln_Memorial_reflecting_pool_-_DC.jpg"
+          alt="The Lincoln Memorial Reflecting Pool, visibly green in color"
+          crossorigin="anonymous"
+        />
+        <div class="photo-caption">
+          <span>Lincoln Memorial Reflecting Pool · Washington, D.C.</span>
+          <span class="photo-source">Photo: Wikimedia Commons / Public Domain</span>
+        </div>
+      </div>
+      <div class="analysis-note">
+        <strong>Why is it green?</strong> Algae. The same reason ponds, lakes, and every
+        body of standing water in human history turns green. Algae blooms thrive in warm,
+        nutrient-rich, stagnant water. This is a water feature in a hot, humid city.
+        It is not a conspiracy. It is not politics. It is <em>photosynthesis</em>.
+      </div>
+    </section>
+
+    <!-- EYEDROPPER TOOL -->
+    <div class="section-label">Exhibit B — Interactive Evidence</div>
+    <h2 class="photo-header" style="margin-bottom: 2rem;">Sample It Yourself</h2>
+
+    <div class="tool-section">
+
+      <!-- LEFT: EYEDROPPER -->
+      <div class="tool-card">
+        <div class="tool-card-label">Step 1 — Pick a Color</div>
+        <h3>Eyedropper Tool</h3>
+        <p>
+          Click the button below, then click anywhere on the photo above — or
+          anywhere on your screen. Your browser will sample the exact pixel color.
+          We trust you to aim at the green part, but even if you don't,
+          the rest of the pool is also not red, white, or blue.
+        </p>
+        <button class="eyedropper-btn" id="eyedropperBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M2 22l4-4M14.5 2.5l7 7-10 10-7-7 10-10z"/>
+            <path d="M6 18l-4 4"/>
+          </svg>
+          Sample a Color
+        </button>
+        <p class="no-support-msg" id="noSupportMsg">
+          ⚠ Your browser does not support the EyeDropper API. Try Chrome or Edge.
+        </p>
+      </div>
+
+      <!-- RIGHT: COLOR CHIP -->
+      <div class="tool-card">
+        <div class="tool-card-label">Step 2 — Observe the Evidence</div>
+        <h3>Color Chip</h3>
+        <div class="color-chip-wrap">
+          <div class="color-chip" id="colorChip"></div>
+          <div class="color-meta">
+            <div class="color-meta-item">
+              <label>Hex</label>
+              <span id="hexValue">—</span>
+            </div>
+            <div class="color-meta-item">
+              <label>RGB</label>
+              <span id="rgbValue">—</span>
+            </div>
+            <div class="color-meta-item">
+              <label>Hue</label>
+              <span id="hueValue">—</span>
+            </div>
+            <div class="color-meta-item">
+              <label>Verdict</label>
+              <span id="verdictShort">—</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- VERDICT -->
+    <div class="verdict" id="verdictBanner">
+      <div class="verdict-tag" id="verdictTag">Analysis Complete</div>
+      <div class="verdict-headline" id="verdictHeadline">—</div>
+      <p class="verdict-body" id="verdictBody">—</p>
+    </div>
+
+    <!-- EXCUSE BINGO -->
+    <section class="excuse-section">
+      <div class="section-label">Hall of Cope</div>
+      <h2 class="photo-header">The Official Excuse Bingo Card</h2>
+      <p style="font-size:0.9rem; color: var(--muted); max-width: 40rem; margin-top: 0.5rem;">
+        A comprehensive catalogue of reasons offered by the media to explain why
+        the thing that looks green is not, in fact, green — or is green but is somehow Biden's fault.
+      </p>
+      <div class="excuse-grid">
+        <div class="excuse-card">
+          <span class="excuse-num">01</span>
+          <h4>"It's just the lighting"</h4>
+          <p>The lighting in every photograph, drone footage, and the actual sky above Washington D.C., presumably.</p>
+          <span class="verdict-badge">Debunked by: Noon</span>
+        </div>
+        <div class="excuse-card">
+          <span class="excuse-num">02</span>
+          <h4>"Democrat-controlled EPA stopped cleaning it"</h4>
+          <p>The Lincoln Memorial Reflecting Pool is maintained by the National Park Service. Algae does not read executive orders.</p>
+          <span class="verdict-badge">Debunked by: Biology</span>
+        </div>
+        <div class="excuse-card">
+          <span class="excuse-num">03</span>
+          <h4>"The Left wants DC to look dirty"</h4>
+          <p>A clandestine multi-decade algae-deployment operation. Thousands of operatives. No leaks. Plausible.</p>
+          <span class="verdict-badge">Debunked by: Occam's Razor</span>
+        </div>
+        <div class="excuse-card">
+          <span class="excuse-num">04</span>
+          <h4>"It's not really that green"</h4>
+          <p>Counterpoint: look at it.</p>
+          <span class="verdict-badge">Debunked by: Eyes</span>
+        </div>
+        <div class="excuse-card">
+          <span class="excuse-num">05</span>
+          <h4>"It was worse under Obama"</h4>
+          <p>This is technically a concession that it is, in fact, green. Progress!</p>
+          <span class="verdict-badge">Self-own detected</span>
+        </div>
+        <div class="excuse-card">
+          <span class="excuse-num">06</span>
+          <h4>"The media is using color-corrected photos"</h4>
+          <p>The media, the tourists, the Park Service, Google Maps satellite view, and your own uncle's vacation photos are all in on it.</p>
+          <span class="verdict-badge">Debunked by: Google Maps</span>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer>
+    <div class="footer-headline">The Party Says 2+2=5.</div>
+    <p>Your eyes are working fine. The pool is green. Algae exists. We're done here.</p>
+    <p style="margin-top:0.75rem; opacity: 0.5;">
+      This is satire. The color #5A7A52 is green.
+      Nineteen Eighty-Four was a warning, not a how-to guide.
+    </p>
+  </footer>
+
+  <script>
+    const btn = document.getElementById('eyedropperBtn');
+    const chip = document.getElementById('colorChip');
+    const hexVal = document.getElementById('hexValue');
+    const rgbVal = document.getElementById('rgbValue');
+    const hueVal = document.getElementById('hueValue');
+    const verdictShort = document.getElementById('verdictShort');
+    const verdictBanner = document.getElementById('verdictBanner');
+    const verdictTag = document.getElementById('verdictTag');
+    const verdictHeadline = document.getElementById('verdictHeadline');
+    const verdictBody = document.getElementById('verdictBody');
+    const noSupportMsg = document.getElementById('noSupportMsg');
+
+    // Check EyeDropper support
+    if (!window.EyeDropper) {
+      btn.disabled = true;
+      noSupportMsg.style.display = 'block';
+    }
+
+    function hexToRgb(hex) {
+      const r = parseInt(hex.slice(1,3), 16);
+      const g = parseInt(hex.slice(3,5), 16);
+      const b = parseInt(hex.slice(5,7), 16);
+      return { r, g, b };
+    }
+
+    function rgbToHsl(r, g, b) {
+      r /= 255; g /= 255; b /= 255;
+      const max = Math.max(r, g, b), min = Math.min(r, g, b);
+      let h, s, l = (max + min) / 2;
+      if (max === min) {
+        h = s = 0;
+      } else {
+        const d = max - min;
+        s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+        switch (max) {
+          case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
+          case g: h = ((b - r) / d + 2) / 6; break;
+          case b: h = ((r - g) / d + 4) / 6; break;
+        }
+      }
+      return { h: Math.round(h * 360), s: Math.round(s * 100), l: Math.round(l * 100) };
+    }
+
+    function getHueName(h, s, l) {
+      if (s < 12) return 'Gray / Achromatic';
+      if (l < 10) return 'Black';
+      if (l > 90) return 'White';
+      if (h >= 75 && h <= 165) return 'Green';
+      if (h >= 165 && h <= 195) return 'Cyan / Teal';
+      if (h >= 195 && h <= 260) return 'Blue';
+      if (h >= 260 && h <= 290) return 'Violet';
+      if (h >= 290 && h <= 345) return 'Magenta / Pink';
+      if (h >= 345 || h < 15) return 'Red';
+      if (h >= 15 && h < 45) return 'Orange';
+      if (h >= 45 && h < 75) return 'Yellow';
+      return 'Unknown';
+    }
+
+    function isGreen(h, s, l) {
+      return s > 10 && l > 5 && l < 92 && h >= 70 && h <= 175;
+    }
+
+    const greenResponses = [
+      {
+        headline: "Yep. That's F*cking Green.",
+        body: "Case closed. Your eyes are functioning correctly and have not been compromised by the radical algae agenda. This color — the one you just sampled with your own hand — is green. We rest our case."
+      },
+      {
+        headline: "Oh Would You Look At That. Green.",
+        body: "A shocking development. The pool that looks green is, upon further scientific analysis, green. We are as stunned as you are. Please call your local news station."
+      },
+      {
+        headline: "GREEN. Confirmed. Again.",
+        body: "This is the Nth confirmation of the pool's greenness today. At some point we stop calling it controversial and start calling it a Tuesday."
+      },
+      {
+        headline: "Big If True. Oh Wait, It Is.",
+        body: "Your pixel sample has returned a green reading. This aligns with what scientists, photographers, Park Service employees, tourists, ducks, and functioning eyeballs have been reporting for years."
+      }
+    ];
+
+    const notGreenResponses = [
+      {
+        headline: "Interesting. That Part Isn't Green.",
+        body: "You may have sampled the sky, a monument, or your browser chrome. Bold strategy. We respect it. The pool, however — the green, watery part — remains green."
+      },
+      {
+        headline: "Hm. Try Aiming at the Water.",
+        body: "That color you picked is not green. It's also not the pool. The pool is the big green rectangle in the middle. You can do it."
+      }
+    ];
+
+    btn.addEventListener('click', async () => {
+      try {
+        const eyeDropper = new EyeDropper();
+        const result = await eyeDropper.open();
+        const hex = result.sRGBHex.toUpperCase();
+        const { r, g, b } = hexToRgb(hex);
+        const { h, s, l } = rgbToHsl(r, g, b);
+        const hueName = getHueName(h, s, l);
+        const green = isGreen(h, s, l);
+
+        // Update chip
+        chip.style.backgroundColor = hex;
+        chip.classList.add('has-color');
+
+        // Update meta
+        hexVal.textContent = hex;
+        rgbVal.textContent = `${r}, ${g}, ${b}`;
+        hueVal.textContent = `${h}°`;
+        verdictShort.textContent = hueName;
+
+        // Verdict banner
+        verdictBanner.className = 'verdict visible ' + (green ? 'green' : 'not-green');
+        verdictTag.textContent = green ? '✓ Analysis Complete — Green Detected' : '⚠ Analysis Complete — Non-Green Detected';
+
+        if (green) {
+          const r = greenResponses[Math.floor(Math.random() * greenResponses.length)];
+          verdictHeadline.textContent = r.headline;
+          verdictBody.textContent = r.body;
+        } else {
+          const r = notGreenResponses[Math.floor(Math.random() * notGreenResponses.length)];
+          verdictHeadline.textContent = r.headline;
+          verdictBody.textContent = r.body;
+        }
+
+        verdictBanner.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+      } catch (e) {
+        // User cancelled or browser blocked — no-op
+      }
+    });
+  </script>
+</body>
+</html>
