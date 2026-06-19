@@ -567,9 +567,76 @@
       font-style: normal;
     }
 
+    /* ── WATER OVERLAY ── */
+    #waterCanvas {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 900;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.4s ease;
+    }
+    #waterCanvas.active {
+      pointer-events: all;
+      opacity: 1;
+    }
+
+    /* ── FLOOD CONTROLS ── */
+    .flood-trigger {
+      position: fixed;
+      bottom: 2rem;
+      right: 2rem;
+      z-index: 1000;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 0.6rem;
+    }
+    .flood-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.6rem;
+      padding: 0.9rem 1.4rem;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.78rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      border: none;
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.15s;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+      white-space: nowrap;
+    }
+    .flood-btn:hover  { transform: translateY(-2px); box-shadow: 0 6px 24px rgba(0,0,0,0.4); }
+    .flood-btn:active { transform: translateY(0); }
+    #floodBtn { background: var(--green-accent); color: var(--paper); }
+    #drainBtn { background: var(--ink); color: var(--paper); display: none; }
+    @keyframes pulse-glow {
+      0%,100% { box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
+      50%      { box-shadow: 0 4px 32px rgba(61,107,53,0.8); }
+    }
+    #floodBtn { animation: pulse-glow 2.5s ease-in-out 2s 3; }
+
   </style>
 </head>
 <body>
+
+  <!-- WATER OVERLAY -->
+  <canvas id="waterCanvas" aria-hidden="true"></canvas>
+
+  <!-- FLOOD CONTROLS -->
+  <div class="flood-trigger">
+    <button class="flood-btn" id="drainBtn" aria-label="Drain the swamp">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22V12M8 16l4-4 4 4"/><path d="M20 12a8 8 0 10-16 0"/></svg>
+      Drain the Swamp
+    </button>
+    <button class="flood-btn" id="floodBtn" aria-label="Flood the page with green water">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12h20M2 12c2-4 4-6 6-6s4 4 6 4 4-4 6-4"/><path d="M2 18c2-4 4-6 6-6s4 4 6 4 4-4 6-4"/></svg>
+      Flood the Swamp
+    </button>
+  </div>
 
   <div class="broadcast-bar">
     ⚠ BREAKING: LOCAL EYES CONTINUE TO FUNCTION CORRECTLY — POOL REMAINS GREEN ⚠
@@ -879,6 +946,234 @@
         // User cancelled or browser blocked — no-op
       }
     });
+  <script>
+    // ── WEBGL WATER ────────────────────────────────────────────────
+    const canvas   = document.getElementById('waterCanvas');
+    const floodBtn = document.getElementById('floodBtn');
+    const drainBtn = document.getElementById('drainBtn');
+    const gl = canvas.getContext('webgl', { alpha: true, premultipliedAlpha: false, antialias: false });
+
+    if (!gl) {
+      floodBtn.style.display = 'none'; // silently hide if no WebGL
+    } else {
+
+      // ── Shaders ──
+      const vsSource = `
+        attribute vec2 aPos;
+        void main() { gl_Position = vec4(aPos, 0.0, 1.0); }
+      `;
+
+      const fsSource = `
+        precision mediump float;
+        uniform float uTime;
+        uniform float uLevel;   // 0=empty 1=full (in screen-space y, bottom=0)
+        uniform vec2  uRes;
+        uniform vec2  uRipple;  // ripple origin (normalised), z=time
+        uniform float uRippleT; // seconds since last ripple
+
+        // smooth noise helper
+        float hash(vec2 p) {
+          return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+        }
+        float noise(vec2 p) {
+          vec2 i = floor(p), f = fract(p);
+          f = f * f * (3.0 - 2.0 * f);
+          return mix(
+            mix(hash(i), hash(i+vec2(1,0)), f.x),
+            mix(hash(i+vec2(0,1)), hash(i+vec2(1,1)), f.x),
+            f.y);
+        }
+
+        void main() {
+          vec2 uv = gl_FragCoord.xy / uRes;
+          // flip y so 0=bottom
+          float y = uv.y;
+
+          // ── Wave surface ──
+          float t = uTime;
+          float wx = uv.x;
+          float w1 = sin(wx * 7.0  + t * 1.4)  * 0.013;
+          float w2 = sin(wx * 13.5 - t * 2.0)  * 0.007;
+          float w3 = sin(wx * 4.0  + t * 0.9)  * 0.010;
+          float w4 = sin(wx * 22.0 + t * 3.1)  * 0.003;
+          float surface = uLevel + w1 + w2 + w3 + w4;
+
+          // ── Ripple from click ──
+          float rippleAmt = 0.0;
+          if (uRippleT < 3.0) {
+            vec2 d = uv - uRipple;
+            d.x *= uRes.x / uRes.y; // aspect correct
+            float dist = length(d);
+            float age  = uRippleT;
+            float ring = sin(dist * 60.0 - age * 12.0) * exp(-dist * 5.0) * exp(-age * 2.0);
+            rippleAmt  = ring * 0.025;
+          }
+          surface += rippleAmt;
+
+          // Discard above waterline
+          if (y > surface) {
+            gl_FragColor = vec4(0.0);
+            return;
+          }
+
+          // ── Depth 0=surface 1=bottom ──
+          float depth = clamp((surface - y) / max(uLevel, 0.001), 0.0, 1.0);
+
+          // ── Caustics (cheap — two overlapping noise layers) ──
+          vec2 cauUV = uv * vec2(uRes.x/uRes.y, 1.0);
+          float c1 = noise(cauUV * 8.0  + vec2(t * 0.6,  t * 0.4));
+          float c2 = noise(cauUV * 12.0 - vec2(t * 0.5,  t * 0.7));
+          float caustic = pow(c1 * c2, 1.6) * 0.55 * (1.0 - depth * 0.7);
+
+          // ── Colour gradient surface → deep ──
+          vec3 colSurface = vec3(0.22, 0.60, 0.22);
+          vec3 colMid     = vec3(0.08, 0.30, 0.10);
+          vec3 colDeep    = vec3(0.02, 0.12, 0.04);
+          vec3 waterCol   = mix(colSurface, mix(colMid, colDeep, depth), depth);
+          waterCol       += caustic * vec3(0.20, 0.35, 0.18);
+
+          // ── Surface foam band ──
+          float foamWidth = 0.018 + abs(w1) * 0.5;
+          float foam = smoothstep(foamWidth, 0.0, surface - y);
+          waterCol = mix(waterCol, vec3(0.75, 0.92, 0.72), foam * 0.75);
+
+          // ── Vignette toward sides ──
+          float vig = 1.0 - smoothstep(0.3, 0.9, abs(uv.x - 0.5) * 2.0) * 0.25;
+          waterCol *= vig;
+
+          // ── Alpha: slightly transparent at surface, opaque below ──
+          float alpha = mix(0.82, 0.97, depth);
+
+          gl_FragColor = vec4(waterCol * alpha, alpha);
+        }
+      `;
+
+      function compileShader(type, src) {
+        const s = gl.createShader(type);
+        gl.shaderSource(s, src);
+        gl.compileShader(s);
+        return s;
+      }
+
+      const prog = gl.createProgram();
+      gl.attachShader(prog, compileShader(gl.VERTEX_SHADER,   vsSource));
+      gl.attachShader(prog, compileShader(gl.FRAGMENT_SHADER, fsSource));
+      gl.linkProgram(prog);
+      gl.useProgram(prog);
+
+      // Full-screen quad
+      const buf = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+      const aPos = gl.getAttribLocation(prog, 'aPos');
+      gl.enableVertexAttribArray(aPos);
+      gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+
+      // Uniforms
+      const uTime    = gl.getUniformLocation(prog, 'uTime');
+      const uLevel   = gl.getUniformLocation(prog, 'uLevel');
+      const uRes     = gl.getUniformLocation(prog, 'uRes');
+      const uRipple  = gl.getUniformLocation(prog, 'uRipple');
+      const uRippleT = gl.getUniformLocation(prog, 'uRippleT');
+
+      gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+      gl.enable(gl.BLEND);
+
+      // ── State ──
+      let level       = 0.0;    // current water level (screen-space 0-1)
+      let targetLevel = 0.0;
+      let flooding    = false;
+      let rafId       = null;
+      let startTime   = null;
+      let ripplePos   = [0.5, 0.5];
+      let rippleStart = -99;
+
+      function resize() {
+        canvas.width  = window.innerWidth;
+        canvas.height = window.innerHeight;
+        gl.viewport(0, 0, canvas.width, canvas.height);
+      }
+      resize();
+      window.addEventListener('resize', resize);
+
+      // ── Render loop ──
+      function render(ts) {
+        if (!startTime) startTime = ts;
+        const t = (ts - startTime) * 0.001;
+
+        // Ease level toward target
+        const speed = flooding ? 0.0028 : 0.005;
+        const diff  = targetLevel - level;
+        if (Math.abs(diff) > 0.0005) {
+          level += diff * speed * 60 / (1000 / Math.max(ts - (render._last || ts), 1));
+          level += diff * speed; // fallback
+        } else {
+          level = targetLevel;
+        }
+        render._last = ts;
+
+        gl.clearColor(0, 0, 0, 0);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        gl.uniform1f(uTime,    t);
+        gl.uniform1f(uLevel,   level);
+        gl.uniform2f(uRes,     canvas.width, canvas.height);
+        gl.uniform2fv(uRipple, ripplePos);
+        gl.uniform1f(uRippleT, (ts - startTime) * 0.001 - rippleStart);
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+        rafId = requestAnimationFrame(render);
+      }
+
+      // ── Click ripple on water ──
+      canvas.addEventListener('click', (e) => {
+        if (!flooding) return;
+        const nx = e.clientX / window.innerWidth;
+        const ny = e.clientY / window.innerHeight;
+        ripplePos  = [nx, ny];
+        rippleStart = (performance.now() - startTime) * 0.001;
+      });
+
+      // ── Flood ──
+      function startFlood() {
+        flooding    = true;
+        targetLevel = 1.05; // slightly over to fill fully
+        canvas.classList.add('active');
+        floodBtn.style.display = 'none';
+        drainBtn.style.display = 'inline-flex';
+        document.body.style.overflow = 'hidden';
+        if (!rafId) rafId = requestAnimationFrame(render);
+      }
+
+      // ── Drain ──
+      function startDrain() {
+        flooding    = false;
+        targetLevel = 0.0;
+        drainBtn.style.display  = 'none';
+        document.body.style.overflow = '';
+
+        // Wait for level to reach near-zero then hide canvas
+        const check = setInterval(() => {
+          if (level < 0.005) {
+            canvas.classList.remove('active');
+            level = 0;
+            floodBtn.style.display = 'inline-flex';
+            cancelAnimationFrame(rafId);
+            rafId = null;
+            clearInterval(check);
+          }
+        }, 100);
+      }
+
+      floodBtn.addEventListener('click', startFlood);
+      drainBtn.addEventListener('click', startDrain);
+
+      // Keyboard shortcut: F to flood, D/Esc to drain
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'f' || e.key === 'F') startFlood();
+        if ((e.key === 'd' || e.key === 'D' || e.key === 'Escape') && flooding) startDrain();
+      });
+    }
   </script>
+
 </body>
 </html>
