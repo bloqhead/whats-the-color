@@ -950,239 +950,197 @@
         // User cancelled or browser blocked — no-op
       }
     });
+  </script>
+
   <script>
-    // ── WATER ─────────────────────────────────────────────────────
-    const canvas   = document.getElementById('waterCanvas');
-    const floodBtn = document.getElementById('floodBtn');
-    const drainBtn = document.getElementById('drainBtn');
+    // ── WATER (Canvas 2D — universal iOS Safari support) ───────────
+    (function () {
+      var canvas   = document.getElementById('waterCanvas');
+      var floodBtn = document.getElementById('floodBtn');
+      var drainBtn = document.getElementById('drainBtn');
+      var ctx      = canvas.getContext('2d');
 
-    let flooding    = false;
-    let level       = 0.0;
-    let targetLevel = 0.0;
-    let rafId       = null;
-    let startTime   = null;
-    let lastTs      = null;
-    let ripplePos   = [0.5, 0.5];
-    let rippleStart = -99;
-    let drainTimer  = null;
+      var flooding    = false;
+      var level       = 0.0;   // 0=empty, 1=full (fraction of screen height from bottom)
+      var targetLevel = 0.0;
+      var rafId       = null;
+      var lastTs      = null;
+      var ripples     = [];
 
-    // ── Attach button handlers FIRST, unconditionally ──
-    function onFlood(e) {
-      e.preventDefault();
-      if (flooding) return;
-      flooding    = true;
-      targetLevel = 1.05;
-      canvas.classList.add('active');
-      floodBtn.style.display = 'none';
-      drainBtn.style.display = 'inline-flex';
-      document.body.style.overflow = 'hidden';
-      if (!rafId) rafId = requestAnimationFrame(renderFrame);
-    }
+      // ── Resize ──
+      function resize() {
+        canvas.width  = window.innerWidth;
+        canvas.height = window.innerHeight;
+      }
+      resize();
+      window.addEventListener('resize', resize);
 
-    function onDrain(e) {
-      e.preventDefault();
-      if (!flooding) return;
-      flooding    = false;
-      targetLevel = 0.0;
-      drainBtn.style.display = 'none';
-      document.body.style.overflow = '';
-      if (drainTimer) clearInterval(drainTimer);
-      drainTimer = setInterval(() => {
-        if (level < 0.005) {
-          level = 0;
-          canvas.classList.remove('active');
-          floodBtn.style.display = 'inline-flex';
-          if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
-          clearInterval(drainTimer);
-        }
-      }, 100);
-    }
+      // ── Draw ──
+      function draw(ts) {
+        var dt = lastTs ? Math.min((ts - lastTs) / 1000, 0.05) : 0.016;
+        lastTs = ts;
+        var t  = ts / 1000;
 
-    // Both click AND touchend — iOS Safari can drop click on canvas-adjacent elements
-    ['click', 'touchend'].forEach(ev => {
-      floodBtn.addEventListener(ev, onFlood, { passive: false });
-      drainBtn.addEventListener(ev, onDrain, { passive: false });
-    });
-
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'f' || e.key === 'F') onFlood(e);
-      if ((e.key === 'd' || e.key === 'D' || e.key === 'Escape') && flooding) onDrain(e);
-    });
-
-    // ── WebGL setup (fully wrapped — any error just skips rendering) ──
-    let gl = null;
-    let glReady = false;
-    let uTime, uLevel, uRes, uRipple, uRippleT;
-
-    try {
-      const opts = { alpha: true, antialias: false, powerPreference: 'low-power' };
-      gl = canvas.getContext('webgl', opts)
-        || canvas.getContext('experimental-webgl', opts);
-
-      if (gl) {
-        const vs = `
-          attribute vec2 aPos;
-          void main() { gl_Position = vec4(aPos, 0.0, 1.0); }
-        `;
-        const fs = `
-          precision mediump float;
-          uniform float uTime;
-          uniform float uLevel;
-          uniform vec2  uRes;
-          uniform vec2  uRipple;
-          uniform float uRippleT;
-
-          float hash(vec2 p) {
-            return fract(sin(dot(p, vec2(127.1,311.7))) * 43758.5453);
-          }
-          float noise(vec2 p) {
-            vec2 i = floor(p), f = fract(p);
-            f = f*f*(3.0-2.0*f);
-            return mix(
-              mix(hash(i), hash(i+vec2(1,0)), f.x),
-              mix(hash(i+vec2(0,1)), hash(i+vec2(1,1)), f.x), f.y);
-          }
-
-          void main() {
-            vec2 uv = gl_FragCoord.xy / uRes;
-            float t  = uTime;
-
-            float w1 = sin(uv.x*7.0  + t*1.4)  * 0.013;
-            float w2 = sin(uv.x*13.5 - t*2.0)  * 0.007;
-            float w3 = sin(uv.x*4.0  + t*0.9)  * 0.010;
-            float w4 = sin(uv.x*22.0 + t*3.1)  * 0.003;
-            float surface = uLevel + w1 + w2 + w3 + w4;
-
-            if (uRippleT < 3.0) {
-              vec2 d  = uv - uRipple;
-              d.x    *= uRes.x / uRes.y;
-              float dist = length(d);
-              surface += sin(dist*60.0 - uRippleT*12.0)
-                       * exp(-dist*5.0) * exp(-uRippleT*2.0) * 0.025;
-            }
-
-            if (uv.y > surface) { gl_FragColor = vec4(0.0); return; }
-
-            float depth = clamp((surface - uv.y) / max(uLevel, 0.001), 0.0, 1.0);
-
-            vec2 cUV = uv * vec2(uRes.x/uRes.y, 1.0);
-            float c1 = noise(cUV*8.0  + vec2(t*0.6, t*0.4));
-            float c2 = noise(cUV*12.0 - vec2(t*0.5, t*0.7));
-            float caustic = pow(c1*c2, 1.6) * 0.55 * (1.0 - depth*0.7);
-
-            vec3 colS = vec3(0.22, 0.60, 0.22);
-            vec3 colM = vec3(0.08, 0.30, 0.10);
-            vec3 colD = vec3(0.02, 0.12, 0.04);
-            vec3 col  = mix(colS, mix(colM, colD, depth), depth);
-            col      += caustic * vec3(0.20, 0.35, 0.18);
-
-            float foamW = 0.018 + abs(w1)*0.5;
-            float foam  = smoothstep(foamW, 0.0, surface - uv.y);
-            col = mix(col, vec3(0.75, 0.92, 0.72), foam*0.75);
-
-            float vig = 1.0 - smoothstep(0.3, 0.9, abs(uv.x-0.5)*2.0)*0.25;
-            col *= vig;
-
-            float alpha = mix(0.82, 0.97, depth);
-            gl_FragColor = vec4(col * alpha, alpha);
-          }
-        `;
-
-        function makeShader(type, src) {
-          const s = gl.createShader(type);
-          gl.shaderSource(s, src);
-          gl.compileShader(s);
-          if (!gl.getShaderParameter(s, gl.COMPILE_STATUS))
-            throw new Error('Shader: ' + gl.getShaderInfoLog(s));
-          return s;
+        // Ease level
+        var diff = targetLevel - level;
+        if (Math.abs(diff) > 0.0005) {
+          level += diff * (flooding ? 0.35 : 0.6) * dt;
+        } else {
+          level = targetLevel;
         }
 
-        const prog = gl.createProgram();
-        gl.attachShader(prog, makeShader(gl.VERTEX_SHADER,   vs));
-        gl.attachShader(prog, makeShader(gl.FRAGMENT_SHADER, fs));
-        gl.linkProgram(prog);
-        if (!gl.getProgramParameter(prog, gl.LINK_STATUS))
-          throw new Error('Link: ' + gl.getProgramInfoLog(prog));
-        gl.useProgram(prog);
+        var W = canvas.width;
+        var H = canvas.height;
+        var surfaceY = H * (1 - level); // y=0 is top
 
-        const buf = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-        gl.bufferData(gl.ARRAY_BUFFER,
-          new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
-        const aPos = gl.getAttribLocation(prog, 'aPos');
-        gl.enableVertexAttribArray(aPos);
-        gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+        ctx.clearRect(0, 0, W, H);
 
-        uTime    = gl.getUniformLocation(prog, 'uTime');
-        uLevel   = gl.getUniformLocation(prog, 'uLevel');
-        uRes     = gl.getUniformLocation(prog, 'uRes');
-        uRipple  = gl.getUniformLocation(prog, 'uRipple');
-        uRippleT = gl.getUniformLocation(prog, 'uRippleT');
-
-        gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-        gl.enable(gl.BLEND);
-
-        glReady = true;
-      }
-    } catch (err) {
-      console.warn('Water WebGL init failed:', err);
-      gl = null;
-    }
-
-    // ── Resize ──
-    function resize() {
-      canvas.width  = window.innerWidth;
-      canvas.height = window.innerHeight;
-      if (gl && glReady) gl.viewport(0, 0, canvas.width, canvas.height);
-    }
-    resize();
-    window.addEventListener('resize', resize);
-
-    // ── Ripple on tap ──
-    function spawnRipple(cx, cy) {
-      if (!flooding) return;
-      ripplePos   = [cx / window.innerWidth, cy / window.innerHeight];
-      rippleStart = gl && startTime
-        ? (performance.now() - startTime) * 0.001
-        : 0;
-    }
-    canvas.addEventListener('click',      (e) => spawnRipple(e.clientX, e.clientY));
-    canvas.addEventListener('touchstart', (e) => {
-      e.preventDefault();
-      spawnRipple(e.touches[0].clientX, e.touches[0].clientY);
-    }, { passive: false });
-
-    // ── Render ──
-    function renderFrame(ts) {
-      if (!startTime) startTime = ts;
-      const t  = (ts - startTime) * 0.001;
-      const dt = lastTs ? Math.min((ts - lastTs) * 0.001, 0.05) : 0.016;
-      lastTs = ts;
-
-      const diff = targetLevel - level;
-      if (Math.abs(diff) > 0.001) {
-        level += diff * (flooding ? 0.4 : 0.7) * dt;
-      } else {
-        level = targetLevel;
-      }
-
-      if (gl && glReady) {
-        try {
-          gl.clearColor(0, 0, 0, 0);
-          gl.clear(gl.COLOR_BUFFER_BIT);
-          gl.uniform1f(uTime,    t);
-          gl.uniform1f(uLevel,   level);
-          gl.uniform2f(uRes,     canvas.width, canvas.height);
-          gl.uniform2fv(uRipple, ripplePos);
-          gl.uniform1f(uRippleT, t - rippleStart);
-          gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-        } catch (err) {
-          console.warn('Water render error:', err);
+        if (level < 0.002) {
+          rafId = requestAnimationFrame(draw);
+          return;
         }
+
+        // ── Wave path ──
+        ctx.beginPath();
+        ctx.moveTo(0, H);
+        ctx.lineTo(0, surfaceY);
+
+        var step = 3;
+        for (var x = 0; x <= W; x += step) {
+          var nx  = x / W;
+          var wy  = Math.sin(nx * 6.5   + t * 1.6)  * 10
+                  + Math.sin(nx * 14.0  - t * 2.2)  * 5
+                  + Math.sin(nx * 3.8   + t * 0.9)  * 13
+                  + Math.sin(nx * 22.0  + t * 3.5)  * 2.5;
+          ctx.lineTo(x, surfaceY + wy);
+        }
+        ctx.lineTo(W, H);
+        ctx.closePath();
+
+        // ── Gradient fill ──
+        var grad = ctx.createLinearGradient(0, surfaceY, 0, H);
+        grad.addColorStop(0,    'rgba(90,  185, 90,  0.88)');
+        grad.addColorStop(0.15, 'rgba(55,  150, 65,  0.91)');
+        grad.addColorStop(0.5,  'rgba(25,  100, 35,  0.94)');
+        grad.addColorStop(1,    'rgba(8,   45,  12,  0.97)');
+        ctx.fillStyle = grad;
+        ctx.fill();
+
+        // ── Foam line ──
+        ctx.beginPath();
+        for (var x2 = 0; x2 <= W; x2 += step) {
+          var nx2 = x2 / W;
+          var fy  = Math.sin(nx2 * 6.5  + t * 1.6)  * 10
+                  + Math.sin(nx2 * 14.0 - t * 2.2)  * 5
+                  + Math.sin(nx2 * 3.8  + t * 0.9)  * 13
+                  + Math.sin(nx2 * 22.0 + t * 3.5)  * 2.5;
+          if (x2 === 0) ctx.moveTo(x2, surfaceY + fy);
+          else          ctx.lineTo(x2, surfaceY + fy);
+        }
+        ctx.strokeStyle = 'rgba(190, 250, 190, 0.45)';
+        ctx.lineWidth   = 2.5;
+        ctx.stroke();
+
+        // ── Caustic shimmer blobs ──
+        for (var i = 0; i < 18; i++) {
+          var bx = (Math.sin(i * 2.39 + t * 0.5)  * 0.5 + 0.5) * W;
+          var by = surfaceY
+                 + (Math.cos(i * 1.73 + t * 0.4)  * 0.5 + 0.5) * (H - surfaceY) * 0.85
+                 + (H - surfaceY) * 0.05;
+          var br = 18 + Math.sin(i * 3.1 + t * 1.3) * 10;
+          var bg = ctx.createRadialGradient(bx, by, 0, bx, by, br);
+          bg.addColorStop(0,   'rgba(130, 230, 110, 0.09)');
+          bg.addColorStop(1,   'rgba(130, 230, 110, 0)');
+          ctx.fillStyle = bg;
+          ctx.beginPath();
+          ctx.arc(bx, by, br, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // ── Ripples ──
+        for (var ri = ripples.length - 1; ri >= 0; ri--) {
+          var rp = ripples[ri];
+          rp.age += dt;
+          if (rp.age > 2.5) { ripples.splice(ri, 1); continue; }
+          var progress = rp.age / 2.5;
+          var radius   = rp.maxR * progress;
+          var alpha    = (1 - progress) * 0.5;
+          ctx.beginPath();
+          ctx.arc(rp.x, rp.y, radius, 0, Math.PI * 2);
+          ctx.strokeStyle = 'rgba(200, 255, 200, ' + alpha + ')';
+          ctx.lineWidth   = 2;
+          ctx.stroke();
+          // inner ring
+          if (radius > 20) {
+            ctx.beginPath();
+            ctx.arc(rp.x, rp.y, radius * 0.55, 0, Math.PI * 2);
+            ctx.strokeStyle = 'rgba(200, 255, 200, ' + alpha * 0.4 + ')';
+            ctx.lineWidth   = 1;
+            ctx.stroke();
+          }
+        }
+
+        rafId = requestAnimationFrame(draw);
       }
 
-      rafId = requestAnimationFrame(renderFrame);
-    }
+      // ── Spawn ripple ──
+      function spawnRipple(x, y) {
+        if (!flooding) return;
+        ripples.push({ x: x, y: y, age: 0, maxR: Math.min(W, H) * 0.25 });
+      }
+      canvas.addEventListener('click', function (e) {
+        spawnRipple(e.clientX, e.clientY);
+      });
+      canvas.addEventListener('touchend', function (e) {
+        e.preventDefault();
+        var t = e.changedTouches[0];
+        spawnRipple(t.clientX, t.clientY);
+      }, { passive: false });
+
+      // ── Flood ──
+      function onFlood(e) {
+        e.preventDefault();
+        if (flooding) return;
+        flooding    = true;
+        targetLevel = 1.0;
+        canvas.classList.add('active');
+        floodBtn.style.display = 'none';
+        drainBtn.style.display = 'inline-flex';
+        document.body.style.overflow = 'hidden';
+        if (!rafId) rafId = requestAnimationFrame(draw);
+      }
+
+      // ── Drain ──
+      function onDrain(e) {
+        e.preventDefault();
+        if (!flooding) return;
+        flooding    = false;
+        targetLevel = 0.0;
+        drainBtn.style.display = 'none';
+        document.body.style.overflow = '';
+        var check = setInterval(function () {
+          if (level < 0.005) {
+            level = 0;
+            canvas.classList.remove('active');
+            floodBtn.style.display = 'inline-flex';
+            if (rafId) { cancelAnimationFrame(rafId); rafId = null; lastTs = null; }
+            clearInterval(check);
+          }
+        }, 100);
+      }
+
+      // Attach to both click and touchend — covers all iOS scenarios
+      floodBtn.addEventListener('click',    onFlood);
+      floodBtn.addEventListener('touchend', onFlood, { passive: false });
+      drainBtn.addEventListener('click',    onDrain);
+      drainBtn.addEventListener('touchend', onDrain, { passive: false });
+
+      document.addEventListener('keydown', function (e) {
+        var dummy = { preventDefault: function(){} };
+        if (e.key === 'f' || e.key === 'F') onFlood(dummy);
+        if ((e.key === 'd' || e.key === 'D' || e.key === 'Escape') && flooding) onDrain(dummy);
+      });
+    }());
   </script>
 
 </body>
