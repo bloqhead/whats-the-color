@@ -951,241 +951,237 @@
       }
     });
   <script>
-    // ── WEBGL WATER ────────────────────────────────────────────────
+    // ── WATER ─────────────────────────────────────────────────────
     const canvas   = document.getElementById('waterCanvas');
     const floodBtn = document.getElementById('floodBtn');
     const drainBtn = document.getElementById('drainBtn');
 
-    // iOS Safari: try plain webgl first, then experimental; skip premultipliedAlpha:false
-    const ctxOpts = { alpha: true, antialias: false };
-    const gl = canvas.getContext('webgl', ctxOpts)
-            || canvas.getContext('experimental-webgl', ctxOpts);
+    let flooding    = false;
+    let level       = 0.0;
+    let targetLevel = 0.0;
+    let rafId       = null;
+    let startTime   = null;
+    let lastTs      = null;
+    let ripplePos   = [0.5, 0.5];
+    let rippleStart = -99;
+    let drainTimer  = null;
 
-    if (!gl) {
+    // ── Attach button handlers FIRST, unconditionally ──
+    function onFlood(e) {
+      e.preventDefault();
+      if (flooding) return;
+      flooding    = true;
+      targetLevel = 1.05;
+      canvas.classList.add('active');
       floodBtn.style.display = 'none';
-    } else {
+      drainBtn.style.display = 'inline-flex';
+      document.body.style.overflow = 'hidden';
+      if (!rafId) rafId = requestAnimationFrame(renderFrame);
+    }
 
-      // ── Shaders ──
-      const vsSource = `
-        attribute vec2 aPos;
-        void main() { gl_Position = vec4(aPos, 0.0, 1.0); }
-      `;
-
-      const fsSource = `
-        precision mediump float;
-        uniform float uTime;
-        uniform float uLevel;   // 0=empty 1=full (in screen-space y, bottom=0)
-        uniform vec2  uRes;
-        uniform vec2  uRipple;  // ripple origin (normalised), z=time
-        uniform float uRippleT; // seconds since last ripple
-
-        // smooth noise helper
-        float hash(vec2 p) {
-          return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+    function onDrain(e) {
+      e.preventDefault();
+      if (!flooding) return;
+      flooding    = false;
+      targetLevel = 0.0;
+      drainBtn.style.display = 'none';
+      document.body.style.overflow = '';
+      if (drainTimer) clearInterval(drainTimer);
+      drainTimer = setInterval(() => {
+        if (level < 0.005) {
+          level = 0;
+          canvas.classList.remove('active');
+          floodBtn.style.display = 'inline-flex';
+          if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+          clearInterval(drainTimer);
         }
-        float noise(vec2 p) {
-          vec2 i = floor(p), f = fract(p);
-          f = f * f * (3.0 - 2.0 * f);
-          return mix(
-            mix(hash(i), hash(i+vec2(1,0)), f.x),
-            mix(hash(i+vec2(0,1)), hash(i+vec2(1,1)), f.x),
-            f.y);
-        }
+      }, 100);
+    }
 
-        void main() {
-          vec2 uv = gl_FragCoord.xy / uRes;
-          // flip y so 0=bottom
-          float y = uv.y;
+    // Both click AND touchend — iOS Safari can drop click on canvas-adjacent elements
+    ['click', 'touchend'].forEach(ev => {
+      floodBtn.addEventListener(ev, onFlood, { passive: false });
+      drainBtn.addEventListener(ev, onDrain, { passive: false });
+    });
 
-          // ── Wave surface ──
-          float t = uTime;
-          float wx = uv.x;
-          float w1 = sin(wx * 7.0  + t * 1.4)  * 0.013;
-          float w2 = sin(wx * 13.5 - t * 2.0)  * 0.007;
-          float w3 = sin(wx * 4.0  + t * 0.9)  * 0.010;
-          float w4 = sin(wx * 22.0 + t * 3.1)  * 0.003;
-          float surface = uLevel + w1 + w2 + w3 + w4;
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'f' || e.key === 'F') onFlood(e);
+      if ((e.key === 'd' || e.key === 'D' || e.key === 'Escape') && flooding) onDrain(e);
+    });
 
-          // ── Ripple from click ──
-          float rippleAmt = 0.0;
-          if (uRippleT < 3.0) {
-            vec2 d = uv - uRipple;
-            d.x *= uRes.x / uRes.y; // aspect correct
-            float dist = length(d);
-            float age  = uRippleT;
-            float ring = sin(dist * 60.0 - age * 12.0) * exp(-dist * 5.0) * exp(-age * 2.0);
-            rippleAmt  = ring * 0.025;
+    // ── WebGL setup (fully wrapped — any error just skips rendering) ──
+    let gl = null;
+    let glReady = false;
+    let uTime, uLevel, uRes, uRipple, uRippleT;
+
+    try {
+      const opts = { alpha: true, antialias: false, powerPreference: 'low-power' };
+      gl = canvas.getContext('webgl', opts)
+        || canvas.getContext('experimental-webgl', opts);
+
+      if (gl) {
+        const vs = `
+          attribute vec2 aPos;
+          void main() { gl_Position = vec4(aPos, 0.0, 1.0); }
+        `;
+        const fs = `
+          precision mediump float;
+          uniform float uTime;
+          uniform float uLevel;
+          uniform vec2  uRes;
+          uniform vec2  uRipple;
+          uniform float uRippleT;
+
+          float hash(vec2 p) {
+            return fract(sin(dot(p, vec2(127.1,311.7))) * 43758.5453);
           }
-          surface += rippleAmt;
-
-          // Discard above waterline
-          if (y > surface) {
-            gl_FragColor = vec4(0.0);
-            return;
+          float noise(vec2 p) {
+            vec2 i = floor(p), f = fract(p);
+            f = f*f*(3.0-2.0*f);
+            return mix(
+              mix(hash(i), hash(i+vec2(1,0)), f.x),
+              mix(hash(i+vec2(0,1)), hash(i+vec2(1,1)), f.x), f.y);
           }
 
-          // ── Depth 0=surface 1=bottom ──
-          float depth = clamp((surface - y) / max(uLevel, 0.001), 0.0, 1.0);
+          void main() {
+            vec2 uv = gl_FragCoord.xy / uRes;
+            float t  = uTime;
 
-          // ── Caustics (cheap — two overlapping noise layers) ──
-          vec2 cauUV = uv * vec2(uRes.x/uRes.y, 1.0);
-          float c1 = noise(cauUV * 8.0  + vec2(t * 0.6,  t * 0.4));
-          float c2 = noise(cauUV * 12.0 - vec2(t * 0.5,  t * 0.7));
-          float caustic = pow(c1 * c2, 1.6) * 0.55 * (1.0 - depth * 0.7);
+            float w1 = sin(uv.x*7.0  + t*1.4)  * 0.013;
+            float w2 = sin(uv.x*13.5 - t*2.0)  * 0.007;
+            float w3 = sin(uv.x*4.0  + t*0.9)  * 0.010;
+            float w4 = sin(uv.x*22.0 + t*3.1)  * 0.003;
+            float surface = uLevel + w1 + w2 + w3 + w4;
 
-          // ── Colour gradient surface → deep ──
-          vec3 colSurface = vec3(0.22, 0.60, 0.22);
-          vec3 colMid     = vec3(0.08, 0.30, 0.10);
-          vec3 colDeep    = vec3(0.02, 0.12, 0.04);
-          vec3 waterCol   = mix(colSurface, mix(colMid, colDeep, depth), depth);
-          waterCol       += caustic * vec3(0.20, 0.35, 0.18);
+            if (uRippleT < 3.0) {
+              vec2 d  = uv - uRipple;
+              d.x    *= uRes.x / uRes.y;
+              float dist = length(d);
+              surface += sin(dist*60.0 - uRippleT*12.0)
+                       * exp(-dist*5.0) * exp(-uRippleT*2.0) * 0.025;
+            }
 
-          // ── Surface foam band ──
-          float foamWidth = 0.018 + abs(w1) * 0.5;
-          float foam = smoothstep(foamWidth, 0.0, surface - y);
-          waterCol = mix(waterCol, vec3(0.75, 0.92, 0.72), foam * 0.75);
+            if (uv.y > surface) { gl_FragColor = vec4(0.0); return; }
 
-          // ── Vignette toward sides ──
-          float vig = 1.0 - smoothstep(0.3, 0.9, abs(uv.x - 0.5) * 2.0) * 0.25;
-          waterCol *= vig;
+            float depth = clamp((surface - uv.y) / max(uLevel, 0.001), 0.0, 1.0);
 
-          // ── Alpha: slightly transparent at surface, opaque below ──
-          float alpha = mix(0.82, 0.97, depth);
+            vec2 cUV = uv * vec2(uRes.x/uRes.y, 1.0);
+            float c1 = noise(cUV*8.0  + vec2(t*0.6, t*0.4));
+            float c2 = noise(cUV*12.0 - vec2(t*0.5, t*0.7));
+            float caustic = pow(c1*c2, 1.6) * 0.55 * (1.0 - depth*0.7);
 
-          // Premultiplied alpha output (required for gl.ONE, ONE_MINUS_SRC_ALPHA)
-          gl_FragColor = vec4(waterCol * alpha, alpha);
-        }
-      `;
+            vec3 colS = vec3(0.22, 0.60, 0.22);
+            vec3 colM = vec3(0.08, 0.30, 0.10);
+            vec3 colD = vec3(0.02, 0.12, 0.04);
+            vec3 col  = mix(colS, mix(colM, colD, depth), depth);
+            col      += caustic * vec3(0.20, 0.35, 0.18);
 
-      function compileShader(type, src) {
-        const s = gl.createShader(type);
-        gl.shaderSource(s, src);
-        gl.compileShader(s);
-        return s;
-      }
+            float foamW = 0.018 + abs(w1)*0.5;
+            float foam  = smoothstep(foamW, 0.0, surface - uv.y);
+            col = mix(col, vec3(0.75, 0.92, 0.72), foam*0.75);
 
-      const prog = gl.createProgram();
-      gl.attachShader(prog, compileShader(gl.VERTEX_SHADER,   vsSource));
-      gl.attachShader(prog, compileShader(gl.FRAGMENT_SHADER, fsSource));
-      gl.linkProgram(prog);
-      gl.useProgram(prog);
+            float vig = 1.0 - smoothstep(0.3, 0.9, abs(uv.x-0.5)*2.0)*0.25;
+            col *= vig;
 
-      // Full-screen quad
-      const buf = gl.createBuffer();
-      gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
-      const aPos = gl.getAttribLocation(prog, 'aPos');
-      gl.enableVertexAttribArray(aPos);
-      gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
-
-      // Uniforms
-      const uTime    = gl.getUniformLocation(prog, 'uTime');
-      const uLevel   = gl.getUniformLocation(prog, 'uLevel');
-      const uRes     = gl.getUniformLocation(prog, 'uRes');
-      const uRipple  = gl.getUniformLocation(prog, 'uRipple');
-      const uRippleT = gl.getUniformLocation(prog, 'uRippleT');
-
-      // Standard premultiplied-alpha blend — works correctly on iOS Safari
-      gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-      gl.enable(gl.BLEND);
-
-      // ── State ──
-      let level       = 0.0;
-      let targetLevel = 0.0;
-      let flooding    = false;
-      let rafId       = null;
-      let startTime   = null;
-      let ripplePos   = [0.5, 0.5];
-      let rippleStart = -99;
-      let lastTs      = null;
-
-      function resize() {
-        canvas.width  = window.innerWidth;
-        canvas.height = window.innerHeight;
-        gl.viewport(0, 0, canvas.width, canvas.height);
-      }
-      resize();
-      window.addEventListener('resize', resize);
-
-      // ── Render loop ──
-      function render(ts) {
-        if (!startTime) startTime = ts;
-        const t  = (ts - startTime) * 0.001;
-        const dt = lastTs ? Math.min((ts - lastTs) * 0.001, 0.05) : 0.016;
-        lastTs = ts;
-
-        // Ease level toward target — consistent regardless of framerate
-        const speed = flooding ? 0.4 : 0.7; // units per second
-        const diff  = targetLevel - level;
-        if (Math.abs(diff) > 0.001) {
-          level += diff * speed * dt;
-        } else {
-          level = targetLevel;
-        }
-
-        gl.clearColor(0, 0, 0, 0);
-        gl.clear(gl.COLOR_BUFFER_BIT);
-        gl.uniform1f(uTime,    t);
-        gl.uniform1f(uLevel,   level);
-        gl.uniform2f(uRes,     canvas.width, canvas.height);
-        gl.uniform2fv(uRipple, ripplePos);
-        gl.uniform1f(uRippleT, t - rippleStart);
-        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-
-        rafId = requestAnimationFrame(render);
-      }
-
-      // ── Click/touch ripple on water ──
-      function spawnRipple(clientX, clientY) {
-        if (!flooding) return;
-        ripplePos  = [clientX / window.innerWidth, clientY / window.innerHeight];
-        rippleStart = (performance.now() - startTime) * 0.001;
-      }
-      canvas.addEventListener('click',      (e) => spawnRipple(e.clientX, e.clientY));
-      canvas.addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        spawnRipple(e.touches[0].clientX, e.touches[0].clientY);
-      }, { passive: false });
-
-      // ── Flood ──
-      function startFlood() {
-        flooding    = true;
-        targetLevel = 1.05; // slightly over to fill fully
-        canvas.classList.add('active');
-        floodBtn.style.display = 'none';
-        drainBtn.style.display = 'inline-flex';
-        document.body.style.overflow = 'hidden';
-        if (!rafId) rafId = requestAnimationFrame(render);
-      }
-
-      // ── Drain ──
-      function startDrain() {
-        flooding    = false;
-        targetLevel = 0.0;
-        drainBtn.style.display  = 'none';
-        document.body.style.overflow = '';
-
-        // Wait for level to reach near-zero then hide canvas
-        const check = setInterval(() => {
-          if (level < 0.005) {
-            canvas.classList.remove('active');
-            level = 0;
-            floodBtn.style.display = 'inline-flex';
-            cancelAnimationFrame(rafId);
-            rafId = null;
-            clearInterval(check);
+            float alpha = mix(0.82, 0.97, depth);
+            gl_FragColor = vec4(col * alpha, alpha);
           }
-        }, 100);
+        `;
+
+        function makeShader(type, src) {
+          const s = gl.createShader(type);
+          gl.shaderSource(s, src);
+          gl.compileShader(s);
+          if (!gl.getShaderParameter(s, gl.COMPILE_STATUS))
+            throw new Error('Shader: ' + gl.getShaderInfoLog(s));
+          return s;
+        }
+
+        const prog = gl.createProgram();
+        gl.attachShader(prog, makeShader(gl.VERTEX_SHADER,   vs));
+        gl.attachShader(prog, makeShader(gl.FRAGMENT_SHADER, fs));
+        gl.linkProgram(prog);
+        if (!gl.getProgramParameter(prog, gl.LINK_STATUS))
+          throw new Error('Link: ' + gl.getProgramInfoLog(prog));
+        gl.useProgram(prog);
+
+        const buf = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+        gl.bufferData(gl.ARRAY_BUFFER,
+          new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+        const aPos = gl.getAttribLocation(prog, 'aPos');
+        gl.enableVertexAttribArray(aPos);
+        gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+
+        uTime    = gl.getUniformLocation(prog, 'uTime');
+        uLevel   = gl.getUniformLocation(prog, 'uLevel');
+        uRes     = gl.getUniformLocation(prog, 'uRes');
+        uRipple  = gl.getUniformLocation(prog, 'uRipple');
+        uRippleT = gl.getUniformLocation(prog, 'uRippleT');
+
+        gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+        gl.enable(gl.BLEND);
+
+        glReady = true;
+      }
+    } catch (err) {
+      console.warn('Water WebGL init failed:', err);
+      gl = null;
+    }
+
+    // ── Resize ──
+    function resize() {
+      canvas.width  = window.innerWidth;
+      canvas.height = window.innerHeight;
+      if (gl && glReady) gl.viewport(0, 0, canvas.width, canvas.height);
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    // ── Ripple on tap ──
+    function spawnRipple(cx, cy) {
+      if (!flooding) return;
+      ripplePos   = [cx / window.innerWidth, cy / window.innerHeight];
+      rippleStart = gl && startTime
+        ? (performance.now() - startTime) * 0.001
+        : 0;
+    }
+    canvas.addEventListener('click',      (e) => spawnRipple(e.clientX, e.clientY));
+    canvas.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      spawnRipple(e.touches[0].clientX, e.touches[0].clientY);
+    }, { passive: false });
+
+    // ── Render ──
+    function renderFrame(ts) {
+      if (!startTime) startTime = ts;
+      const t  = (ts - startTime) * 0.001;
+      const dt = lastTs ? Math.min((ts - lastTs) * 0.001, 0.05) : 0.016;
+      lastTs = ts;
+
+      const diff = targetLevel - level;
+      if (Math.abs(diff) > 0.001) {
+        level += diff * (flooding ? 0.4 : 0.7) * dt;
+      } else {
+        level = targetLevel;
       }
 
-      floodBtn.addEventListener('click', startFlood);
-      drainBtn.addEventListener('click', startDrain);
+      if (gl && glReady) {
+        try {
+          gl.clearColor(0, 0, 0, 0);
+          gl.clear(gl.COLOR_BUFFER_BIT);
+          gl.uniform1f(uTime,    t);
+          gl.uniform1f(uLevel,   level);
+          gl.uniform2f(uRes,     canvas.width, canvas.height);
+          gl.uniform2fv(uRipple, ripplePos);
+          gl.uniform1f(uRippleT, t - rippleStart);
+          gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+        } catch (err) {
+          console.warn('Water render error:', err);
+        }
+      }
 
-      // Keyboard shortcut: F to flood, D/Esc to drain
-      document.addEventListener('keydown', (e) => {
-        if (e.key === 'f' || e.key === 'F') startFlood();
-        if ((e.key === 'd' || e.key === 'D' || e.key === 'Escape') && flooding) startDrain();
-      });
+      rafId = requestAnimationFrame(renderFrame);
     }
   </script>
 
