@@ -570,12 +570,16 @@
     /* ── WATER OVERLAY ── */
     #waterCanvas {
       position: fixed;
-      inset: 0;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      left: 0;
       width: 100%;
       height: 100%;
       z-index: 900;
       pointer-events: none;
       opacity: 0;
+      -webkit-transition: opacity 0.4s ease;
       transition: opacity 0.4s ease;
     }
     #waterCanvas.active {
@@ -951,10 +955,14 @@
     const canvas   = document.getElementById('waterCanvas');
     const floodBtn = document.getElementById('floodBtn');
     const drainBtn = document.getElementById('drainBtn');
-    const gl = canvas.getContext('webgl', { alpha: true, premultipliedAlpha: false, antialias: false });
+
+    // iOS Safari: try plain webgl first, then experimental; skip premultipliedAlpha:false
+    const ctxOpts = { alpha: true, antialias: false };
+    const gl = canvas.getContext('webgl', ctxOpts)
+            || canvas.getContext('experimental-webgl', ctxOpts);
 
     if (!gl) {
-      floodBtn.style.display = 'none'; // silently hide if no WebGL
+      floodBtn.style.display = 'none';
     } else {
 
       // ── Shaders ──
@@ -1044,6 +1052,7 @@
           // ── Alpha: slightly transparent at surface, opaque below ──
           float alpha = mix(0.82, 0.97, depth);
 
+          // Premultiplied alpha output (required for gl.ONE, ONE_MINUS_SRC_ALPHA)
           gl_FragColor = vec4(waterCol * alpha, alpha);
         }
       `;
@@ -1076,17 +1085,19 @@
       const uRipple  = gl.getUniformLocation(prog, 'uRipple');
       const uRippleT = gl.getUniformLocation(prog, 'uRippleT');
 
-      gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+      // Standard premultiplied-alpha blend — works correctly on iOS Safari
+      gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
       gl.enable(gl.BLEND);
 
       // ── State ──
-      let level       = 0.0;    // current water level (screen-space 0-1)
+      let level       = 0.0;
       let targetLevel = 0.0;
       let flooding    = false;
       let rafId       = null;
       let startTime   = null;
       let ripplePos   = [0.5, 0.5];
       let rippleStart = -99;
+      let lastTs      = null;
 
       function resize() {
         canvas.width  = window.innerWidth;
@@ -1099,18 +1110,18 @@
       // ── Render loop ──
       function render(ts) {
         if (!startTime) startTime = ts;
-        const t = (ts - startTime) * 0.001;
+        const t  = (ts - startTime) * 0.001;
+        const dt = lastTs ? Math.min((ts - lastTs) * 0.001, 0.05) : 0.016;
+        lastTs = ts;
 
-        // Ease level toward target
-        const speed = flooding ? 0.0028 : 0.005;
+        // Ease level toward target — consistent regardless of framerate
+        const speed = flooding ? 0.4 : 0.7; // units per second
         const diff  = targetLevel - level;
-        if (Math.abs(diff) > 0.0005) {
-          level += diff * speed * 60 / (1000 / Math.max(ts - (render._last || ts), 1));
-          level += diff * speed; // fallback
+        if (Math.abs(diff) > 0.001) {
+          level += diff * speed * dt;
         } else {
           level = targetLevel;
         }
-        render._last = ts;
 
         gl.clearColor(0, 0, 0, 0);
         gl.clear(gl.COLOR_BUFFER_BIT);
@@ -1118,20 +1129,23 @@
         gl.uniform1f(uLevel,   level);
         gl.uniform2f(uRes,     canvas.width, canvas.height);
         gl.uniform2fv(uRipple, ripplePos);
-        gl.uniform1f(uRippleT, (ts - startTime) * 0.001 - rippleStart);
+        gl.uniform1f(uRippleT, t - rippleStart);
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
         rafId = requestAnimationFrame(render);
       }
 
-      // ── Click ripple on water ──
-      canvas.addEventListener('click', (e) => {
+      // ── Click/touch ripple on water ──
+      function spawnRipple(clientX, clientY) {
         if (!flooding) return;
-        const nx = e.clientX / window.innerWidth;
-        const ny = e.clientY / window.innerHeight;
-        ripplePos  = [nx, ny];
+        ripplePos  = [clientX / window.innerWidth, clientY / window.innerHeight];
         rippleStart = (performance.now() - startTime) * 0.001;
-      });
+      }
+      canvas.addEventListener('click',      (e) => spawnRipple(e.clientX, e.clientY));
+      canvas.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        spawnRipple(e.touches[0].clientX, e.touches[0].clientY);
+      }, { passive: false });
 
       // ── Flood ──
       function startFlood() {
